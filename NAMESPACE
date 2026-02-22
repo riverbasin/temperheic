@@ -2,6 +2,7 @@
 
 S3method(print,temperheic)
 S3method(print,thUnits)
+export(detrend_temperature)
 export(fit_fft)
 export(fit_ols)
 export(generate_example_aquifer)
@@ -21,3 +22,4 @@ export(thObservedSeries)
 export(thSeries)
 export(thSignal)
 export(thUnits)
+export(window_temperature)
