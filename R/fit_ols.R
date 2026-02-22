@@ -56,6 +56,7 @@
 #' the diurnally forced advection-diffusion equation to estimate bulk fluid
 #' velocity and diffusivity in streambeds from temperature time series. Water
 #' Resources Research, 49, 488-506.
+#' @export
 fit_ols <- function(empiricalData, boundaryMean, periodInSeconds,
                     optimizeRange, nmin, empiricalDataPeriods) {
 

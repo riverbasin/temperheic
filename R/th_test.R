@@ -178,3 +178,60 @@ test_round_trip <- function(
     })
   })
 }
+
+
+#' Generate a composite stream temperature signal with diel and annual components
+#'
+#' Creates a synthetic hourly temperature time series that mimics real stream
+#' temperature data, with amplitude-modulated diel cycles nested within a
+#' seasonal (annual) envelope. Parameters are derived from Meacham Creek
+#' Channel 3 observations.
+#'
+#' The signal model is a diel cosine whose amplitude is seasonally modulated
+#' (larger in summer, smaller in winter), superimposed on an annual cosine.
+#' This creates a realistic amplitude-modulated signal whose FFT contains
+#' the fundamental diel and annual peaks plus sidebands at 1/day +/- 1/year.
+#'
+#' @param n_years Numeric, duration in years (default 1).
+#' @param dt Numeric, time step in seconds (default 3600 = hourly).
+#' @param T_mu Mean annual temperature (default 10.5 degC).
+#' @param A_annual Annual amplitude (default 8.0 degC).
+#' @param A_diel_mean Mean diel amplitude (default 2.2 degC).
+#' @param A_diel_mod Seasonal modulation of diel amplitude (default 1.8 degC).
+#' @param phi_diel_hour Hour of daily peak temperature (default 15 = 3 PM).
+#' @param phi_annual_day Day of year for annual peak (default 200, late July).
+#'
+#' @return A zoo object with time index in seconds from start, suitable
+#'   for use with fit_ols, fit_fft, or as boundary condition input.
+#'
+#' @references
+#' Parameters derived from Meacham Creek Channel 3 (2012-2014).
+generate_composite_boundary <- function(
+    n_years = 1,
+    dt = 3600,
+    T_mu = 10.5,
+    A_annual = 8.0,
+    A_diel_mean = 2.2,
+    A_diel_mod = 1.8,
+    phi_diel_hour = 15,
+    phi_annual_day = 200
+) {
+
+  n_seconds <- round(n_years * 365.25 * 86400)
+  t_sec <- seq(0, n_seconds - dt, by = dt)
+
+  omega_annual <- 2 * pi / (365.25 * 86400)
+  omega_diel   <- 2 * pi / 86400
+
+  phi_annual   <- -omega_annual * phi_annual_day * 86400
+  phi_diel     <- -omega_diel * phi_diel_hour * 3600
+  phi_diel_mod <- phi_annual
+
+  annual_component <- A_annual * cos(omega_annual * t_sec + phi_annual)
+  diel_envelope    <- A_diel_mean + A_diel_mod * cos(omega_annual * t_sec + phi_diel_mod)
+  diel_component   <- diel_envelope * cos(omega_diel * t_sec + phi_diel)
+
+  temperature <- T_mu + annual_component + diel_component
+
+  zoo::zoo(temperature, order.by = t_sec)
+}

@@ -258,4 +258,173 @@ for (scenario_name in c("diel", "annual")) {
   }
 }
 
-cat("\n=== Script complete. Explore objects: fwd, inv_ols, inv_nls, comparison ===\n")
+
+
+# === 9. Composite stream temperature: diel + annual signal ===================
+#
+# Real stream temperature is not a pure sinusoid at a single frequency.
+# It is an amplitude-modulated signal: a diel cycle whose amplitude varies
+# seasonally (large in summer, small in winter), superimposed on the annual
+# cycle. Parameters below are derived from Meacham Creek Channel 3
+# (2012-2014, 907 days including winter):
+#
+#   Annual mean:          10.5 °C
+#   Annual amplitude:      8.0 °C (range ~2.5 to ~18.5 °C)
+#   Mean diel amplitude:   2.2 °C (half-range)
+#   Diel amp modulation:   1.8 °C (summer ~4.0, winter ~0.4 °C)
+#
+# The product of the diel carrier with the seasonal envelope creates
+# sidebands at (1/day ± 1/year) in the FFT — this is the spectral
+# fingerprint of amplitude modulation.
+
+composite_stream <- generate_composite_boundary(n_years = 1)
+
+# Plot: full year
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+t_days <- as.numeric(index(composite_stream)) / 86400
+plot(t_days, coredata(composite_stream), type = "l", col = "steelblue",
+     xlab = "Day of year", ylab = "Temperature (°C)",
+     main = "Composite stream temperature (1 year)")
+
+# Zoom: 2 weeks in summer (day 190-204)
+summer_idx <- t_days >= 190 & t_days <= 204
+plot(t_days[summer_idx], coredata(composite_stream)[summer_idx],
+     type = "l", col = "red",
+     xlab = "Day of year", ylab = "Temperature (°C)",
+     main = "Summer diel cycles (Jul)")
+
+# Zoom: 2 weeks in winter (day 0-14)
+winter_idx <- t_days >= 0 & t_days <= 14
+plot(t_days[winter_idx], coredata(composite_stream)[winter_idx],
+     type = "l", col = "blue",
+     xlab = "Day of year", ylab = "Temperature (°C)",
+     main = "Winter diel cycles (Jan)")
+
+# Power spectrum — should show annual peak, diel peak, and sidebands
+temp_vec <- coredata(composite_stream)
+n <- length(temp_vec)
+dt <- median(diff(index(composite_stream)))
+fft_result <- fft(temp_vec - mean(temp_vec))
+freqs <- (0:(n - 1)) / (n * dt)
+power <- Mod(fft_result)^2 / n
+periods_hr <- 1 / freqs / 3600
+
+nyq <- floor(n / 2)
+plot(periods_hr[2:nyq], power[2:nyq], type = "l", log = "xy",
+     xlab = "Period (hours)", ylab = "Power",
+     main = "Power spectrum — composite signal")
+abline(v = 24, col = "red", lty = 2)
+abline(v = 12, col = "orange", lty = 2)
+abline(v = 24 * 365.25, col = "blue", lty = 2)
+text(24, max(power[2:nyq]) * 0.01, "24h", col = "red", pos = 2, cex = 0.8)
+text(12, max(power[2:nyq]) * 0.003, "12h", col = "orange", pos = 2, cex = 0.8)
+text(24 * 365.25, max(power[2:nyq]) * 0.3, "annual", col = "blue", pos = 2, cex = 0.8)
+
+
+# === 10. Compare OLS and FFT on the composite signal ==========================
+#
+# Extract the diel amplitude and phase from the composite using both methods.
+# The composite is a single boundary sensor, so we get one amplitude/phase.
+# The key question: does the diel fit correctly extract ~2.2 °C mean amplitude
+# even though the signal is amplitude-modulated?
+
+comp_zoo <- zoo(matrix(coredata(composite_stream), ncol = 1,
+                       dimnames = list(NULL, "stream")),
+                order.by = index(composite_stream))
+
+# Diel fit
+ols_diel <- fit_ols(comp_zoo, mean(coredata(composite_stream)), 86400,
+                     c(-1/8, 7/8), 10, 1)
+fft_diel <- fit_fft(comp_zoo, mean(coredata(composite_stream)), 86400,
+                     c(-1/8, 7/8), 10, 1)
+
+# Annual fit
+ols_annual <- fit_ols(comp_zoo, mean(coredata(composite_stream)),
+                       86400 * 365.25, c(-1/8, 7/8), 10, 1)
+fft_annual <- fit_fft(comp_zoo, mean(coredata(composite_stream)),
+                       86400 * 365.25, c(-1/8, 7/8), 10, 1)
+
+cat("\n=== Composite signal: amplitude extraction ===\n")
+cat("Known annual amplitude: 8.0 °C\n")
+cat("  OLS recovered:", round(attr(ols_annual, "amplitudes"), 3), "°C\n")
+cat("  FFT recovered:", round(attr(fft_annual, "amplitudes"), 3), "°C\n")
+cat("\nKnown mean diel amplitude: 2.2 °C\n")
+cat("  OLS recovered:", round(attr(ols_diel, "amplitudes"), 3), "°C\n")
+cat("  FFT recovered:", round(attr(fft_diel, "amplitudes"), 3), "°C\n")
+cat("\nNote: The diel fit recovers the MEAN diel amplitude (2.2 °C),\n")
+cat("not the summer peak (4.0 °C) or winter trough (0.4 °C), because\n")
+cat("the cosine regression averages over the full record.\n")
+cat("This is the amplitude underprediction problem that motivates\n")
+cat("windowed or time-varying analysis approaches.\n")
+
+
+
+# === 11. Seasonal windows: data with fit overlay ==============================
+#
+# Fit the diel cosine separately on a summer window and a winter window,
+# then overlay the fit on the data. This shows how a single-frequency
+# cosine captures the signal in each season, and why the whole-year fit
+# underpredicts summer amplitude.
+
+comp_data <- coredata(composite_stream)
+comp_t    <- as.numeric(index(composite_stream))
+t_days_c  <- comp_t / 86400
+omega_diel <- 2 * pi / 86400
+
+# Define seasonal windows (days of year)
+windows <- list(
+  winter  = c(0, 30),        # Jan
+  spring  = c(90, 120),      # Apr
+  summer  = c(180, 210),     # Jul
+  autumn  = c(270, 300)      # Oct
+)
+
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+
+for (season_name in names(windows)) {
+  win <- windows[[season_name]]
+  idx <- which(t_days_c >= win[1] & t_days_c <= win[2])
+
+  # Subset for this window
+  t_win <- comp_t[idx]
+  T_win <- comp_data[idx]
+  t_win_rel <- t_win - t_win[1]
+
+  # OLS fit on this window
+  sin_basis <- sin(omega_diel * t_win_rel)
+  cos_basis <- cos(omega_diel * t_win_rel)
+  fit <- lm(T_win ~ sin_basis + cos_basis)
+  alpha_s <- coef(fit)[["sin_basis"]]
+  alpha_c <- coef(fit)[["cos_basis"]]
+  win_amp <- sqrt(alpha_s^2 + alpha_c^2)
+
+  # Plot data + fit
+  plot(t_days_c[idx], T_win, type = "l", col = "steelblue",
+       xlab = "Day of year", ylab = "Temp (\u00B0C)",
+       main = sprintf("%s \u2014 diel amp = %.2f \u00B0C", season_name, win_amp))
+  lines(t_days_c[idx], fitted(fit), col = "red", lwd = 2)
+  legend("topright", c("data", "diel fit"), col = c("steelblue", "red"),
+         lty = 1, lwd = c(1, 2), cex = 0.7, bty = "n")
+}
+
+cat("\nSeasonal diel amplitude recovery (30-day windows):\n")
+for (season_name in names(windows)) {
+  win <- windows[[season_name]]
+  idx <- which(t_days_c >= win[1] & t_days_c <= win[2])
+  t_win <- comp_t[idx]
+  T_win <- comp_data[idx]
+  t_win_rel <- t_win - t_win[1]
+  sin_b <- sin(omega_diel * t_win_rel)
+  cos_b <- cos(omega_diel * t_win_rel)
+  fit <- lm(T_win ~ sin_b + cos_b)
+  amp <- sqrt(coef(fit)[["sin_b"]]^2 + coef(fit)[["cos_b"]]^2)
+  cat(sprintf("  %-8s diel amp = %.2f C\n", season_name, amp))
+}
+cat(sprintf("  %-8s diel amp = %.2f C (whole-year OLS)\n", "annual",
+            attr(ols_diel, "amplitudes")))
+cat(sprintf("  %-8s diel amp = %.2f C (whole-year FFT)\n", "annual",
+            attr(fft_diel, "amplitudes")))
+
+cat("\n=== Script complete. Explore: fwd, inv_ols, inv_nls, comparison,\n")
+cat("    composite_stream, comp_zoo ===\n")
+

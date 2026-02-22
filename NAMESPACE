@@ -2,6 +2,8 @@
 
 S3method(print,temperheic)
 S3method(print,thUnits)
+export(fit_fft)
+export(fit_ols)
 export(generate_example_aquifer)
 export(generate_example_observed)
 export(generate_example_series)

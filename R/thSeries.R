@@ -124,6 +124,7 @@ thSeries <- function(signal, xVals, tVals, specificUnits) {
 #' @param fit_method Character -- method for amplitude/phase extraction.
 #'   "ols" (default) uses linearized OLS harmonic regression (Luce et al. 2013).
 #'   "nls" uses the legacy nonlinear least squares cosine fit (fitCosine).
+#'   "fft" uses FFT spectral extraction at the nearest Fourier bin.
 #'
 #' @return A temperheic S3 object (class thObservedSeries/thSeries/temperheic)
 #' @export
@@ -138,7 +139,7 @@ thObservedSeries <- function(empiricalData,
                              optimizeRange = c(-1/8, 7/8),
                              specificUnits = thUnits(),
                              empiricalDataPeriods = rep(1, ncol(empiricalData)),
-                             fit_method = c("ols", "nls")) {
+                             fit_method = c("ols", "nls", "fft")) {
 
   # --- Input validation ---
   fit_method <- match.arg(fit_method)
@@ -173,6 +174,7 @@ thObservedSeries <- function(empiricalData,
   fit_fn <- switch(fit_method,
     ols = fit_ols,
     nls = fitCosine,
+    fft = fit_fft,
     stop("Unknown fit_method: ", fit_method)
   )
   results <- fit_fn(empiricalData, boundaryMean, period,
