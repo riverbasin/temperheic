@@ -101,7 +101,7 @@ thSeries <- function(signal, xVals, tVals, specificUnits) {
 #' diffusivity, and Darcy flux via the eta-parameter method (Luce et al. 2013).
 #'
 #' The estimation pipeline:
-#' 1. fitCosine() extracts amplitude and phase at each sensor depth
+#' 1. fit_ols() or fitCosine() extracts amplitude and phase at each sensor depth
 #' 2. Pairwise amplitude ratios and phase differences are computed
 #' 3. eta = -ln(Ar) / delta_phi  (Luce 2013)
 #' 4. Thermal velocity from eta and phase diff (Luce 2013, Eq. 60)
@@ -121,6 +121,9 @@ thSeries <- function(signal, xVals, tVals, specificUnits) {
 #' @param specificUnits A thUnits object. Must match the aquifer units.
 #' @param empiricalDataPeriods Numeric vector - number of complete cycles per
 #'   sensor. Default rep(1, ncol(empiricalData)).
+#' @param fit_method Character -- method for amplitude/phase extraction.
+#'   "ols" (default) uses linearized OLS harmonic regression (Luce et al. 2013).
+#'   "nls" uses the legacy nonlinear least squares cosine fit (fitCosine).
 #'
 #' @return A temperheic S3 object (class thObservedSeries/thSeries/temperheic)
 #' @export
@@ -134,9 +137,12 @@ thObservedSeries <- function(empiricalData,
                              freq = (2 * pi) / period,
                              optimizeRange = c(-1/8, 7/8),
                              specificUnits = thUnits(),
-                             empiricalDataPeriods = rep(1, ncol(empiricalData))) {
+                             empiricalDataPeriods = rep(1, ncol(empiricalData)),
+                             fit_method = c("ols", "nls")) {
 
   # --- Input validation ---
+  fit_method <- match.arg(fit_method)
+
   if ((optimizeRange[2] - optimizeRange[1]) != 1) {
     stop("max optimize range - min optimize range must = 1.0")
   }
@@ -161,8 +167,16 @@ thObservedSeries <- function(empiricalData,
   nSeries <- ncol(empiricalData)
 
   # --- Fit cosine to each sensor and get pairwise comparisons ---
-  results <- fitCosine(empiricalData, boundaryMean, period,
-                       optimizeRange, nmin, empiricalDataPeriods)
+  # Dispatch to the selected fitting method. All methods return the same
+  # output structure: list(deltaPhaseRadians, ampRatio) with attributes
+  # "amplitudes" and "phases".
+  fit_fn <- switch(fit_method,
+    ols = fit_ols,
+    nls = fitCosine,
+    stop("Unknown fit_method: ", fit_method)
+  )
+  results <- fit_fn(empiricalData, boundaryMean, period,
+                    optimizeRange, nmin, empiricalDataPeriods)
 
   amplitude     <- attr(results, "amplitudes")
   relativePhase <- attr(results, "phases")
@@ -260,4 +274,3 @@ thObservedSeries <- function(empiricalData,
     thObjectNames = "aquifer"
   )
 }
-

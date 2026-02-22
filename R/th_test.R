@@ -91,13 +91,15 @@ generate_example_series <- function(
 #'
 #' @param series_list Output from generate_example_series().
 #' @param nmin Named list of minimum non-NA obs per sensor by scenario.
+#' @param fit_method Character -- fitting method passed to thObservedSeries.
 #'
 #' @return A list mirroring the structure of series_list, with thObservedSeries
 #'   objects replacing thSeries objects.
 #' @export
 generate_example_observed <- function(
     series_list,
-    nmin = list(diel = 10, annual = 180)) {
+    nmin = list(diel = 10, annual = 180),
+    fit_method = "ols") {
 
   purrr::imap(series_list, function(scenario_series, scenario_name) {
     n <- nmin[[scenario_name]] %||% 10
@@ -110,12 +112,16 @@ generate_example_observed <- function(
         period        = ser$signal$boundary$period,
         headGrad      = ser$signal$hydro$headGrad,
         nmin          = n,
-        specificUnits = thUnits()
+        specificUnits = thUnits(),
+        fit_method    = fit_method
       )
     })
   })
 }
 
+
+# Suppress R CMD check NOTEs for tibble column names used in NSE context
+utils::globalVariables(c("known", "recovered"))
 
 #' Round-trip validation: forward -> inverse -> compare
 #'
@@ -125,6 +131,7 @@ generate_example_observed <- function(
 #'
 #' @param aquifer A thAquifer object. Default uses generate_example_aquifer().
 #' @param scenarios Passed to generate_example_series(). Default scenarios.
+#' @param fit_method Character -- fitting method: "ols" (default) or "nls".
 #'
 #' @return A tibble with columns: scenario, combo, parameter, known, recovered,
 #'   relative_error. Uses the [1,2] element of pairwise matrices (boundary
@@ -132,7 +139,8 @@ generate_example_observed <- function(
 #' @export
 test_round_trip <- function(
     aquifer = generate_example_aquifer(),
-    scenarios = NULL) {
+    scenarios = NULL,
+    fit_method = "ols") {
 
   # Generate forward and inverse
   if (is.null(scenarios)) {
@@ -140,7 +148,7 @@ test_round_trip <- function(
   } else {
     fwd_list <- generate_example_series(aquifer, scenarios)
   }
-  inv_list <- generate_example_observed(fwd_list)
+  inv_list <- generate_example_observed(fwd_list, fit_method = fit_method)
 
   # Compare known vs recovered for each combination
   purrr::imap_dfr(fwd_list, function(scenario_fwd, scenario_name) {
