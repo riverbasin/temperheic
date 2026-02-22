@@ -1,266 +1,178 @@
+# thUtils.R — Utility functions for temperheic
+#
+# Contains:
+#   fitCosine()      — Cosine fitting engine for the inverse model (thObservedSeries)
+#   derived2DArray() — Builds named pairwise matrices from vectors of sensor comparisons
 
 
-#' @export
-as.xts.thSeries = function(x, POSIXct.origin) {
-  theOrder = as.POSIXct(x$time, origin = POSIXct.origin)
-  x = x[-match("time", names(x))]
-  x = xts(x, order.by = theOrder)
-  return(x)
-}
-
-#' @export
-as.zoo.thSeries = function(x, POSIXct.origin) {
-  theOrder = as.POSIXct(x$time, origin = POSIXct.origin)
-  x = x[-match("time", names(x))]
-  x = zoo(x, order.by = theOrder)
-  return(x)
-}
-
-#' @export
-htPlot = function(myThSeries, POSIXct.origin = "2014-01-01 00:00:00") {
-  myXTS = as.xts.thSeries(myThSeries, POSIXct.origin)
-  plot(myXTS$x0, main = "", ylab = "Temperature (degC)", type = 'n', auto.grid = F, minor.ticks = F)
-  lines(myXTS$x0, col = "grey70", lwd = 3, lty=2)
-  for(col in names(myXTS)[2:length(names(myXTS))]) {
-    lines(myXTS[,col], lwd = 3)
-  }
-  seriesAttr = attributes(myThSeries)
-  sg = attr(myThSeries, "signal")
-  hy = attr(sg, "hydro")
-  k = hy$hydCond
-  d = hy$dispersivity
-  text(as.numeric(min(index(myXTS))), max(myXTS$x0), pos = 4, paste0("k = ", round(k,6), "  B = ", round(d, 6)))
-}
-
-
-
-# Replaces general units (e.g., "E t-1 L-3 T-1") with specific units specified
-# by the user (e.g., "kJ s-1 m-3 degC-1")
-.thSpecificUnits = function(generalUnits, specificUnits = thUnits()) {
-  atomicUnits = unlist(lapply(generalUnits, strsplit, split = " "), recursive = F)
-
-  #regular expression for an optional "-" and any number of digits at the end of
-  #a string
-  pattern = "[-]?[[:digit:]]+$"
-  #strip off any match to pattern
-  generalSymbols = lapply(atomicUnits, sub, pattern = pattern, replacement = "")
-  #return any substring that matches to pattern
-  generalExponents =
-    lapply(
-      atomicUnits,
-      function(x) {
-        locations = regexpr(pattern = pattern, x)
-        locations[locations == -1] = 1000000L
-        substring(x, locations)
-      }
-    )
-
-  #return any generalSymbols that are not expected.  If any, throw error and
-  #report to user
-  unexpectedGenUnits = sapply(generalSymbols, function(x) {any(!(x %in% names(specificUnits)))})
-  if(any(unexpectedGenUnits)) {
-    cat("Unexpected general units found in: ", paste0("'", generalUnits[unexpectedGenUnits], "'", collapse = ", "), '\n  Expected units are: ', paste0(attributes(specificUnits)$longUnitName, "='", names(specificUnits), "'", collapse = ", "))
-    stop("A general unit can be followed by positive or negative number (representing and exponent).\nThere can be no space between a unit and its exponent (e.g., 'M-3' not 'M -3').\nThere must be spaces between unit/exponent pairs (e.g. 'E L-3', not 'EL-3')")
-  }
-
-  #replace the generalSymbols with corresponding specific ones
-  generalSymbols = lapply(generalSymbols, function(x) unlist(specificUnits)[x])
-  #concatinate specific units with exponents and return vector specific units and exponents
-  return(mapply(paste0, generalSymbols, generalExponents, collapse = " "))
-}
-
-#' Mean Squared Residuals and linear regression between two lagged time series
+#' Build a named square matrix from a pairwise comparison vector
 #'
-#' Functions for regression two time series against one another (y ~ x), while
-#' accounting for any lag time of the pattern in y realative to similar patterns
-#' in x.
+#' Takes a vector of length n^2 (from expand.grid permutations of n sensors)
+#' and reshapes it into an n x n matrix with labeled rows and columns.
+#' Used by thObservedSeries to organize amplitude ratios, phase differences,
+#' eta values, and depth differences into sensor-pair matrices.
 #'
-#' When two time series of the same length are subjected to a lag, the number of
-#' x,y pairs is reduced in proportion to the size of the lag because the series
-#' are become more and more offset in time (analogous to the reduction of the
-#' amount of overlap between two meter-sticks, which start out aligned, but are
-#' then then slid in opposite directions).  The nmin ensures that the estimate
-#' of mean squared residuals is based on at least nmin x,y pairs, once the time
-#' lag in y is accounted for.
-#'
-#' \code{laggedMSR()} is desigend to be passed to optimize() in order to find
-#' the lag with the minimum mean squared residuals between time series x and y.
-#'
-#' @return \code{laggedMSR} Returns the mean squared residuals of a linear model
-#'   (y ~ x) given a time series x and y, assuming that time series y lags time
-#'   series x by lag time units.  NOTE: When regressed agains one another, two
-#'   cos waves with a lag of pi radians will yield a mean squared residual of
-#'   zero and a slope of -1.0.  This is an undesirable solution.  The prefered
-#'   solution is a lag of zero, which will yield a MSR of 0 and a slope of 1.0.
-#'   This, in this function, residuals are calculated using the absolute value
-#'   of the regression slope. This ensures that the prefered solution (where low
-#'   MSR is associated with lags that are in phase rather than out of phase) is
-#'   always returned.
-#' @param lag Time that time series y lags time series x.
-#' @param thSeriesPair Zoo object with two columns -- the starting sine wave and ending sine wave
-#' @param t A vector of times of observations of values in x and y
-#' @param nmin Minimum number of x.y pairs desired (see Details)
-#' @export
-laggedMSR = function(lag, thSeriesPair, nmin) {
-  lData = laggedData(lag, thSeriesPair)
-  if(nrow(lData) < nmin) {
-    result = NULL
-  } else {
-    fit = laggedModel(lData)
-    a = coefficients(fit)
-    result = mean((lData[,2] - (a[1] + abs(a[2]) * lData[,1]))^2)
-  }
-  return(result)
-}
-
-#' @rdname laggedMSR
-#' @return \code{laggedModel} runs \code{\link{lm}()} on lData and returns
-#'   the results.  Usually, lData is generated by calling \code{laggedData()}
-#' @param lData A zoo object, typcally returned by calling \code{laggedData()}
-#' @export
-laggedModel = function(lData) {
-  return(lm(lData[,2] ~ lData[,1]))
-}
-
-#'@rdname laggedMSR
-#'@return \code{laggedData()} creates a \code{\link{zoo}} object with two
-#'  columns (x and y).  Each row in the zoo object contains a pair of
-#'  observations, after accounting for the lag -- the amount of time y lags x.
-#'  \code{\link{na.spline}()} is used to calculate the y column in the zoo
-#'  object if lag is not an even multiple of the times between observations.
-#'@export
-laggedData = function(lag, thSeriesPair) {
-  # Create zoo objects
-  thSeriesX = thSeriesPair[,1]
-  thSeriesY = thSeriesPair[,2]
-  zoo::index(thSeriesY) = zoo::index(thSeriesY) - lag
-  # Merge series into one object
-  storeNames = names(thSeriesPair)
-  thSeriesPair <- merge(thSeriesX, thSeriesY)
-  names(thSeriesPair) = storeNames
-  # Interpolate calibration data (na.spline could also be used)
-  thSeriesPair[,2] <- zoo::na.approx(object = thSeriesPair[,2], na.rm = F)
-  # Only keep index values from sample data
-  thSeriesPair <- thSeriesPair[!(is.na(thSeriesPair[,1]) | is.na(thSeriesPair[,2])) ,]
-  return(thSeriesPair)
-}
-
-# converts passed values into 3d array
-derivedArray = function(ampRatio, deltaPhaseRadians, eta, seriesNames) {
-  derivedVals = array(
-    data = c(ampRatio, deltaPhaseRadians, eta),
-    dim = c(length(seriesNames), length(seriesNames), 3),
-    dimnames = list(from = seriesNames, to = seriesNames, value = c("ampRatio", "deltaPhaseRadians", "eta"))
-  )
-  return(derivedVals)
-}
-
-derived2DArray = function(x, seriesNames) {
-  derivedVals = array(
+#' @param x Numeric vector of length n^2 (pairwise values)
+#' @param seriesNames Character vector of length n (sensor/depth names)
+#' @return A named n x n matrix with dimnames "from" (rows) and "to" (columns)
+derived2DArray <- function(x, seriesNames) {
+  array(
     data = x,
     dim = c(length(seriesNames), length(seriesNames)),
     dimnames = list(from = seriesNames, to = seriesNames)
   )
-  return(derivedVals)
 }
 
 
-fitCosine = function(empiricalData, boundaryMean, periodInSeconds, optimizeRange, nmin, empiricalDataPeriods) {
+#' Fit cosine curves to multi-depth temperature time series
+#'
+#' Uses nonlinear least squares (nls) to fit a cosine function to each sensor's
+#' temperature data, extracting amplitude and phase. Returns pairwise amplitude
+#' ratios and phase differences for all sensor combinations.
+#'
+#' The fitted model at each depth is:
+#'   T(t) = boundaryMean + A * cos((2*pi/period) * t - phi)
+#'
+#' where A (amplitude) and phi (phase) are estimated by nls, and boundaryMean
+#' and period are held fixed (known from the boundary condition).
+#'
+#' @details
+#' **Negative amplitude handling:** nls may converge to a negative amplitude
+#' with a phase offset. When this happens, the amplitude is negated and pi
+#' radians is added to the phase (mathematically equivalent: -A*cos(t - phi) =
+#' A*cos(t - phi - pi)).
+#'
+#' **Phase wrapping:** Phases are adjusted relative to the boundary sensor's
+#' phase to ensure consistent phase differences across depths. The
+#' `optimizeRange` parameter defines the valid window (in periods) for phase
+#' values relative to the boundary, and `empiricalDataPeriods` accounts for
+#' multi-period datasets where deeper sensors may lag by more than one cycle.
+#'
+#' **Noise injection for synthetic data:** When input data is a perfect cosine
+#' (zero residuals), nls encounters a singular gradient and fails. A negligible
+#' amount of noise (~0.01% of the mean) is added to prevent this. This has no
+#' measurable effect on real data but enables round-trip validation with
+#' synthetic signals.
+#'
+#' @param empiricalData A zoo object with one column per sensor depth.
+#'   Column names should correspond to sensor identifiers.
+#' @param boundaryMean Numeric scalar — mean temperature at the boundary (degC).
+#'   Held fixed during fitting.
+#' @param periodInSeconds Numeric scalar — period of the target cycle (s).
+#'   86400 for diel, 86400*365.25 for annual.
+#' @param optimizeRange Numeric vector of length 2 — valid phase window as
+#'   fractions of the period relative to the boundary sensor phase.
+#'   Default c(-0.05, 1.05) allows slight negative phases and up to one
+#'   full period of lag.
+#' @param nmin Integer — minimum number of non-NA observations required to
+#'   attempt fitting for a given sensor. Sensors below this threshold return
+#'   NA for amplitude and phase.
+#' @param empiricalDataPeriods Numeric — number of complete cycles in the data.
+#'   Used for phase unwrapping in multi-period datasets (typically 1 for
+#'   standard analysis windows).
+#'
+#' @return A list with two components:
+#'   \describe{
+#'     \item{deltaPhaseRadians}{Numeric vector of length n^2 — pairwise phase
+#'       differences (radians). Reshape with derived2DArray().}
+#'     \item{ampRatio}{Numeric vector of length n^2 — pairwise amplitude ratios.
+#'       Reshape with derived2DArray().}
+#'   }
+#'   Attributes:
+#'   \describe{
+#'     \item{amplitudes}{Named numeric vector — fitted amplitude per sensor.}
+#'     \item{phases}{Named numeric vector — fitted phase per sensor (radians).}
+#'   }
+fitCosine <- function(empiricalData, boundaryMean, periodInSeconds,
+                      optimizeRange, nmin, empiricalDataPeriods) {
 
-  # means = sapply(empiricalData, mean)
-  # grandMean = mean(means)
-  ## using nls to fit the data
-  ampEst = sapply(empiricalData, function(x) (max(x) - min(x))/2)
-  seconds = as.numeric(zoo::index(empiricalData))
+  # Initial amplitude estimates (half the observed range at each depth)
+  ampEst <- purrr::map_dbl(as.data.frame(empiricalData),
+                            ~ (max(.x, na.rm = TRUE) - min(.x, na.rm = TRUE)) / 2)
 
-  fits = mapply(
-    function(eD, ampEst, obsTime, boundaryMean, period){
-      if(length(na.omit(eD)) >= nmin) {
-        # put in teeny tiny bit of noise so nls will fit a cosine to data that represent a perfect wave
-        eD = eD + runif(length(eD), min = -(mean(eD) * 0.0001), max = mean(eD)* 0.0001)
-        fitResult = nls(
-          formula = eD ~ boundaryMean + AmpY._ * cos((2*pi/period) * obsTime - PhaY._),
-          start = list(AmpY._ = ampEst, PhaY._ = 0),
-          na.action = "na.exclude"
-        )
-        # if the fit amplitude is negative, negate it and add pi radians to the phase
-        # modulus phase by 2pi to make sure the phase is between 0 and 2pi radians
-        if(coef(fitResult)[1] < 0){
-          results = c(fitAmp = -coef(fitResult)[1], fitPhase = (coef(fitResult)[2] + pi)%%(2*pi))
-        }else{
-          results = c(fitAmp = coef(fitResult)[1], fitPhase = coef(fitResult)[2]%%(2*pi))
-        }
+  # Time vector in seconds from start (nls needs numeric, not POSIXct)
+  seconds <- as.numeric(zoo::index(empiricalData))
+  obsTime <- seconds - seconds[1]
 
-      } else {
-        results = c(fitAmp = NA, fitPhase = NA)
+  # --- Fit cosine to each sensor independently via nls ---
+  #
+  # Each sensor gets: T(t) = boundaryMean + A * cos(omega*t - phi)
+  # with A and phi as free parameters. boundaryMean and period are fixed.
+  fits <- purrr::map2(
+    as.data.frame(empiricalData),
+    ampEst,
+    function(eD, amp_init) {
+      # Require minimum number of non-NA observations
+      if (length(stats::na.omit(eD)) < nmin) {
+        return(c(fitAmp = NA_real_, fitPhase = NA_real_))
       }
-      return(results)
-    },
-    eD = as.data.frame(empiricalData),
-    ampEst = ampEst,
-    MoreArgs = list(
-      obsTime = seconds - seconds[1],
-      boundaryMean = boundaryMean,
-      period = periodInSeconds
-    ),
-    SIMPLIFY = T
-  )
 
-  fitAmp = fits[1,]
-  fitPhase = fits[2,]
-  initialPhase = fitPhase[1]
-  relativeRange = 2*pi*optimizeRange + initialPhase
-  fitPhase[fitPhase < relativeRange[1]] = fitPhase[fitPhase < relativeRange[1]] + 2*pi
-  fitPhase = fitPhase + (empiricalDataPeriods - 1)*2*pi
-  #outOfRange = fitPhase > optimizeRange[[2]]*2*pi + fitPhase[1]
-  #fitPhase[which(outOfRange)] = fitPhase[which(outOfRange)] - 2*pi
-  ## find permutative combintation of differences for fitPhases
-  permuteCombos = expand.grid(1:length(fitPhase), 1:length(fitAmp))
-  deltaPhaseRadians = apply(permuteCombos, 1, function(x) fitPhase[x[2]] - fitPhase[x[1]])
-  ampRatio = apply(permuteCombos, 1, function(x) fitAmp[x[2]] / fitAmp[x[1]])
+      # Inject negligible noise to avoid singular gradient on perfect cosines.
+      # nls requires non-zero residuals to compute the Jacobian; synthetic data
+      # from the forward model (thSeries) produces exact cosines that cause
+      # convergence failure without this.
+      noise_scale <- mean(eD, na.rm = TRUE) * 1e-4
+      eD <- eD + stats::runif(length(eD), min = -noise_scale, max = noise_scale)
 
-  # 1.0000000  1.1128460         NA  0.8985648  1.0000000         NA  0.5578810  0.6208431  1.0000000
-  #1.666759e-16 -2.262049e-01            NA  2.262049e-01  1.563496e-14            NA  1.234432e+00  1.008227e+00 -1.000026e-16
+      fit <- stats::nls(
+        formula = eD ~ boundaryMean + AmpY._ * cos((2 * pi / periodInSeconds) * obsTime - PhaY._),
+        start   = list(AmpY._ = amp_init, PhaY._ = 0),
+        na.action = "na.exclude"
+      )
 
-  return(structure(list(deltaPhaseRadians = deltaPhaseRadians, ampRatio = ampRatio), amplitudes = fitAmp, phases = fitPhase))
-}
+      amp <- stats::coef(fit)[["AmpY._"]]
+      pha <- stats::coef(fit)[["PhaY._"]]
 
-
-lagLinFit <- function(empiricalData, periodInSeconds, optimizeRange, nmin) {
-  combos = expand.grid(from = names(empiricalData), to = names(empiricalData), stringsAsFactors = F)
-  # calculate phases using phase shifting approach
-  dphase = t(
-    sapply(
-      1:nrow(combos),
-      function(row) {
-        if(row %in% diagonalLocs) {
-          result = list(minimum = 0, objective = 0)
-        } else {
-          result = optimize(f = laggedMSR, interval = periodInSeconds * optimizeRange, thSeriesPair = empiricalData[,as.character(combos[row,])], nmin = nmin)
-        }
-        return(result)
+      # Normalize negative amplitudes: -A*cos(t - phi) == A*cos(t - phi - pi)
+      if (amp < 0) {
+        amp <- -amp
+        pha <- pha + pi
       }
-    )
-  )
 
-  dphase[dphase[,"objective"] < 0,"minimum"] = NA
-  dphase = unlist(dphase[,"minimum"])
-  deltaPhaseRadians = dphase*2*pi/periodInSeconds
+      # Wrap phase to [0, 2*pi)
+      pha <- pha %% (2 * pi)
 
-  ampRatio = sapply(
-    1:nrow(combos),
-    function(rowIndex) {
-      if(is.na(dphase[rowIndex])) {
-        result = NA
-      } else {
-        result = laggedData(dphase[rowIndex], empiricalData[,as.character(combos[rowIndex,])])
-        result = laggedModel(result)
-        result = coefficients(result)[2]
-      }
-      return(result)
+      c(fitAmp = amp, fitPhase = pha)
     }
   )
 
-  return(list(deltaPhaseRadians = deltaPhaseRadians, ampRatio = ampRatio))
+  # Extract amplitude and phase vectors from the list of 2-element results
+  fits_mat <- do.call(rbind, fits)
+  fitAmp   <- fits_mat[, "fitAmp"]
+  fitPhase <- fits_mat[, "fitPhase"]
+  names(fitAmp)   <- names(empiricalData)
+  names(fitPhase) <- names(empiricalData)
 
+  # --- Phase unwrapping relative to boundary sensor ---
+  #
+  # The boundary sensor (first column, shallowest depth) sets the reference
+  # phase. Deeper sensors should have phases that fall within
+  # [initialPhase + optimizeRange[1]*2*pi, initialPhase + optimizeRange[2]*2*pi].
+  #
+  # If a fitted phase falls below this window (e.g., nls found a phase near 0
+
+  # when the boundary is near 2*pi), add 2*pi to bring it into range.
+  #
+  # empiricalDataPeriods accounts for datasets spanning multiple cycles --
+  # deeper sensors may lag by more than one full period.
+  initialPhase <- fitPhase[1]
+  relativeRange <- 2 * pi * optimizeRange + initialPhase
+  fitPhase[fitPhase < relativeRange[1]] <- fitPhase[fitPhase < relativeRange[1]] + 2 * pi
+  fitPhase <- fitPhase + (empiricalDataPeriods - 1) * 2 * pi
+
+  # --- Compute all pairwise amplitude ratios and phase differences ---
+  #
+  # expand.grid produces all (from, to) sensor index pairs. The resulting
+  # vectors are length n^2 and can be reshaped into n x n matrices by
+  # derived2DArray() in the calling function (thObservedSeries).
+  combos <- expand.grid(from = seq_along(fitPhase), to = seq_along(fitAmp))
+  deltaPhaseRadians <- fitPhase[combos$to] - fitPhase[combos$from]
+  ampRatio          <- fitAmp[combos$to]   / fitAmp[combos$from]
+
+  structure(
+    list(deltaPhaseRadians = deltaPhaseRadians, ampRatio = ampRatio),
+    amplitudes = fitAmp,
+    phases     = fitPhase
+  )
 }
+
