@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Large data files - keep local only
+inst/extdata/*.sqlite

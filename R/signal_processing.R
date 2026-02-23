@@ -207,9 +207,13 @@ detrend_temperature <- function(x,
 #'   starts. Controls overlap. `step = width` gives non-overlapping
 #'   windows; `step < width` gives overlap; `step = 86400` slides by
 #'   one day. Default is `width` (non-overlapping).
-#' @param min_coverage Numeric in (0, 1]: minimum fraction of non-NA
-#'   values required within a window to retain it. Default 0.9.
-#'   Windows with excessive missing data are dropped with a message.
+#' @param min_coverage Numeric in (0, 1]: minimum fraction of expected
+#'   observations (non-NA) required within a window to retain it. Default 0.9.
+#'   Expected observation count is computed from the window width and the
+#'   median sampling interval of the full record. This catches both NA
+#'   values at existing timestamps and temporal gaps where index entries
+#'   are missing entirely. Windows failing the check are dropped with
+#'   a message.
 #'
 #' @return A tibble with columns:
 #'   \describe{
@@ -269,17 +273,30 @@ window_temperature <- function(x,
     x[idx >= s & idx < (s + width)]
   })
 
-  # Check coverage: fraction of non-NA values in each window
+  # Temporal coverage check: compare actual non-NA observations against the
+  # expected count based on window width and the median sampling interval
+  # from the full record. This catches BOTH types of missing data:
+  #   1. NA values at existing index positions (sensor malfunction)
+  #   2. Missing index entries entirely (instrument outage, data gap)
+  # The old check (non-NA / total present) missed case 2 because the
+  # denominator shrank with the gap, making coverage look artificially high.
+  median_dt <- stats::median(diff(idx))
+  n_expected <- floor(width / median_dt)
+
   coverage <- purrr::map_dbl(windows, function(w) {
-    vals <- zoo::coredata(w)
-    sum(!is.na(vals)) / length(vals)
+    if (NCOL(w) > 1) {
+      # Multi-column: count non-NA across all columns, expect n_expected per col
+      sum(!is.na(zoo::coredata(w))) / (n_expected * NCOL(w))
+    } else {
+      sum(!is.na(zoo::coredata(w))) / n_expected
+    }
   })
 
   # Filter by min_coverage
   keep <- coverage >= min_coverage
   n_dropped <- sum(!keep)
   if (n_dropped > 0) {
-    message(n_dropped, " window(s) dropped due to insufficient data coverage ",
+    message(n_dropped, " window(s) dropped due to insufficient temporal coverage ",
             "(< ", min_coverage * 100, "%).")
   }
 

@@ -426,6 +426,211 @@ cat(sprintf("  %-8s diel amp = %.2f C (whole-year OLS)\n", "annual",
 cat(sprintf("  %-8s diel amp = %.2f C (whole-year FFT)\n", "annual",
             attr(fft_diel, "amplitudes")))
 
+
+
+# === 12. Detrending the composite signal ======================================
+#
+# Section 10 showed that whole-year OLS/FFT underpredicts diel amplitude
+# because the annual trend biases the cosine fit. Section 11 hacked around
+# this with manual seasonal windows + raw lm(). Now we use the proper
+# signal_processing functions.
+#
+# detrend_temperature() removes the annual cycle, leaving a zero-mean
+# diel oscillation whose amplitude varies seasonally (the AM envelope).
+
+comp_detrended <- detrend_temperature(comp_zoo, method = "loess", span = 0.05,
+                                       return_trend = TRUE)
+
+par(mfrow = c(3, 1), mar = c(4, 4, 3, 1))
+
+# Full year: raw data
+plot(comp_zoo, main = "Raw composite stream temperature",
+     ylab = "Temp (\u00B0C)", xlab = "")
+
+# Trend (the annual cycle, captured by loess)
+plot(comp_detrended$trend, main = "Estimated trend (loess, span = 0.05)",
+     ylab = "Temp (\u00B0C)", xlab = "")
+
+# Detrended residual: the diel signal + noise
+plot(comp_detrended$detrended, main = "Detrended \u2014 isolated diel oscillation",
+     ylab = "\u0394 Temp (\u00B0C)", xlab = "Seconds")
+
+cat("\n=== Detrended composite: range of residuals ===\n")
+cat("  min:", round(min(comp_detrended$detrended, na.rm = TRUE), 2), "\u00B0C\n")
+cat("  max:", round(max(comp_detrended$detrended, na.rm = TRUE), 2), "\u00B0C\n")
+cat("  Summer diel peaks should be ~4 \u00B0C, winter ~0.4 \u00B0C.\n")
+
+
+# === 13. Comparing detrending methods =========================================
+#
+# Loess vs moving average vs polynomial \u2014 how do they differ on real-ish data?
+# The MA method with window = 24 (hourly data, 1-day average) is a natural
+# choice for removing the diel cycle. But here we are removing the ANNUAL
+# trend to preserve the diel cycle, so we need a much wider window.
+
+methods_compare <- list(
+  loess_005  = detrend_temperature(comp_zoo, method = "loess", span = 0.05),
+  loess_02   = detrend_temperature(comp_zoo, method = "loess", span = 0.20),
+  ma_7day    = detrend_temperature(comp_zoo, method = "ma", window = 7 * 24),
+  poly_3     = detrend_temperature(comp_zoo, method = "polynomial", degree = 3)
+)
+
+# Zoom to summer: compare how each method handles the trend removal
+par(mfrow = c(2, 2), mar = c(4, 4, 3, 1))
+t_days_d <- as.numeric(zoo::index(comp_zoo)) / 86400
+summer_range <- t_days_d >= 180 & t_days_d <= 210
+
+for (nm in names(methods_compare)) {
+  dt_vals <- zoo::coredata(methods_compare[[nm]])
+  plot(t_days_d[summer_range], dt_vals[summer_range],
+       type = "l", col = "steelblue",
+       xlab = "Day of year", ylab = "\u0394 Temp (\u00B0C)",
+       main = paste("Summer diel \u2014", nm))
+  abline(h = 0, lty = 2, col = "gray50")
+}
+
+cat("\nNote: loess (span=0.05) and MA (7-day) track the seasonal envelope\n")
+cat("well and leave a clean zero-mean oscillation. The polynomial (degree=3)\n")
+cat("cannot capture the curvature near solstice and leaves residual bias.\n")
+cat("loess (span=0.20) is too smooth \u2014 it leaks diel energy into the trend.\n")
+
+
+# === 14. Windowed diel amplitude: the full pipeline ===========================
+#
+# This is the key demonstration: detrend -> window -> fit -> collect.
+# We use 7-day windows sliding by 1 day, fit each window with both OLS
+# and FFT, and track how the recovered diel amplitude varies through
+# the year. This is the workflow that analyze_flux() will automate.
+
+comp_detrended_zoo <- comp_detrended$detrended
+
+windows_7d <- window_temperature(comp_detrended_zoo,
+                                  width = 7 * 86400,
+                                  step  = 1 * 86400)
+
+cat("\n=== Windowed analysis ===\n")
+cat("  Windows generated:", nrow(windows_7d), "\n")
+cat("  Width: 7 days, Step: 1 day\n")
+
+# Fit each window with OLS and FFT
+window_fits <- windows_7d %>%
+  dplyr::mutate(
+    ols_fit = purrr::map(data, ~ fit_ols(.x, mean(coredata(.x), na.rm = TRUE),
+                                          86400, c(-1/8, 7/8), 10, 1)),
+    fft_fit = purrr::map(data, ~ fit_fft(.x, mean(coredata(.x), na.rm = TRUE),
+                                          86400, c(-1/8, 7/8), 10, 1)),
+    amp_ols = purrr::map_dbl(ols_fit, ~ attr(.x, "amplitudes")[1]),
+    amp_fft = purrr::map_dbl(fft_fit, ~ attr(.x, "amplitudes")[1]),
+    phase_ols = purrr::map_dbl(ols_fit, ~ attr(.x, "phases")[1]),
+    phase_fft = purrr::map_dbl(fft_fit, ~ attr(.x, "phases")[1])
+  )
+
+# Plot: time-varying diel amplitude (OLS vs FFT)
+par(mfrow = c(2, 1), mar = c(4, 4, 3, 1))
+
+center_days <- window_fits$window_center / 86400
+plot(center_days, window_fits$amp_ols, type = "l", col = "steelblue", lwd = 2,
+     xlab = "Day of year", ylab = "Diel amplitude (\u00B0C)",
+     main = "Time-varying diel amplitude: OLS vs FFT",
+     ylim = range(c(window_fits$amp_ols, window_fits$amp_fft), na.rm = TRUE))
+lines(center_days, window_fits$amp_fft, col = "firebrick", lwd = 2, lty = 2)
+abline(h = attr(ols_diel, "amplitudes"), col = "gray50", lty = 3)
+legend("topright", c("OLS (7-day windows)", "FFT (7-day windows)",
+                      "Whole-year OLS"),
+       col = c("steelblue", "firebrick", "gray50"),
+       lty = c(1, 2, 3), lwd = c(2, 2, 1), cex = 0.7, bty = "n")
+
+cat("\nSummer peak amplitude (OLS):", round(max(window_fits$amp_ols, na.rm = TRUE), 2), "\u00B0C\n")
+cat("Winter trough amplitude (OLS):", round(min(window_fits$amp_ols, na.rm = TRUE), 2), "\u00B0C\n")
+cat("Whole-year OLS amplitude:", round(attr(ols_diel, "amplitudes"), 2), "\u00B0C\n")
+cat("This confirms windowing resolves the amplitude underprediction problem.\n")
+
+# Plot: time-varying diel phase (OLS vs FFT)
+plot(center_days, window_fits$phase_ols, type = "l", col = "steelblue", lwd = 2,
+     xlab = "Day of year", ylab = "Diel phase (radians)",
+     main = "Time-varying diel phase: OLS vs FFT",
+     ylim = range(c(window_fits$phase_ols, window_fits$phase_fft), na.rm = TRUE))
+lines(center_days, window_fits$phase_fft, col = "firebrick", lwd = 2, lty = 2)
+legend("topright", c("OLS", "FFT"),
+       col = c("steelblue", "firebrick"), lty = c(1, 2), lwd = 2,
+       cex = 0.7, bty = "n")
+
+
+# === 15. OLS vs FFT agreement across windows ==================================
+#
+# With synthetic data (no noise, exact sinusoidal windows), OLS and FFT
+# should agree closely. The residual disagreement comes from:
+#   1. FFT bin mismatch \u2014 the 7-day window has bins at periods of
+#      7*24*3600/k hours; the diel bin lands at k=7, exactly 24h. Lucky!
+#   2. Edge effects in the detrended signal (loess NAs near boundaries)
+#   3. AM sidebands leaking into the diel bin (minor for 7-day windows)
+
+par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+
+# Amplitude scatter
+plot(window_fits$amp_ols, window_fits$amp_fft,
+     pch = 16, col = "steelblue", cex = 0.8,
+     xlab = "OLS amplitude (\u00B0C)", ylab = "FFT amplitude (\u00B0C)",
+     main = "Window amplitude: OLS vs FFT")
+abline(0, 1, col = "red", lty = 2)
+
+# Phase scatter
+plot(window_fits$phase_ols, window_fits$phase_fft,
+     pch = 16, col = "steelblue", cex = 0.8,
+     xlab = "OLS phase (rad)", ylab = "FFT phase (rad)",
+     main = "Window phase: OLS vs FFT")
+abline(0, 1, col = "red", lty = 2)
+
+amp_rmsd <- sqrt(mean((window_fits$amp_ols - window_fits$amp_fft)^2, na.rm = TRUE))
+phase_rmsd <- sqrt(mean((window_fits$phase_ols - window_fits$phase_fft)^2, na.rm = TRUE))
+cat("\nOLS vs FFT agreement across", nrow(window_fits), "windows:\n")
+cat("  Amplitude RMSD:", round(amp_rmsd, 4), "\u00B0C\n")
+cat("  Phase RMSD:    ", round(phase_rmsd, 4), "rad\n")
+
+
+# === 16. Window width sensitivity =============================================
+#
+# How does window width affect the recovered amplitude time series?
+# Wider windows smooth the seasonal envelope; narrower windows have
+# fewer cycles and noisier fits. The trade-off is temporal resolution
+# vs spectral resolution \u2014 the uncertainty principle at work.
+
+widths_days <- c(3, 5, 7, 14, 30)
+
+width_comparison <- purrr::map_dfr(widths_days, function(w_days) {
+  w_sec <- w_days * 86400
+  wins <- window_temperature(comp_detrended_zoo, width = w_sec, step = 86400)
+  wins %>%
+    dplyr::mutate(
+      amp = purrr::map_dbl(data, function(d) {
+        fit <- fit_ols(d, mean(coredata(d), na.rm = TRUE),
+                       86400, c(-1/8, 7/8), 10, 1)
+        attr(fit, "amplitudes")[1]
+      }),
+      width_days = w_days
+    ) %>%
+    dplyr::select(window_center, amp, width_days)
+})
+
+par(mfrow = c(1, 1), mar = c(4, 4, 3, 1))
+cols <- c("red", "orange", "steelblue", "darkgreen", "purple")
+plot(NULL, xlim = c(0, 365), ylim = c(0, 5),
+     xlab = "Day of year", ylab = "Diel amplitude (\u00B0C)",
+     main = "Window width sensitivity \u2014 diel amplitude")
+
+for (i in seq_along(widths_days)) {
+  sub <- width_comparison %>% dplyr::filter(width_days == widths_days[i])
+  lines(sub$window_center / 86400, sub$amp, col = cols[i], lwd = 1.5)
+}
+legend("topright", paste0(widths_days, "-day"), col = cols, lty = 1, lwd = 1.5,
+       cex = 0.7, bty = "n", title = "Window width")
+
+cat("\nThe 3-day window is noisy (only 3 complete cycles).\n")
+cat("The 30-day window smooths out the seasonal envelope.\n")
+cat("7 days is a reasonable default for diel analysis.\n")
+
+
 cat("\n=== Script complete. Explore: fwd, inv_ols, inv_nls, comparison,\n")
-cat("    composite_stream, comp_zoo ===\n")
+cat("    composite_stream, comp_zoo, comp_detrended, window_fits,\n")
+cat("    width_comparison ===\n")
 

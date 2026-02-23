@@ -17,9 +17,13 @@ starts. Controls overlap. `step = width` gives non-overlapping
 windows; `step < width` gives overlap; `step = 86400` slides by
 one day. Default is `width` (non-overlapping).}
 
-\item{min_coverage}{Numeric in (0, 1]: minimum fraction of non-NA
-values required within a window to retain it. Default 0.9.
-Windows with excessive missing data are dropped with a message.}
+\item{min_coverage}{Numeric in (0, 1]: minimum fraction of expected
+observations (non-NA) required within a window to retain it. Default 0.9.
+Expected observation count is computed from the window width and the
+median sampling interval of the full record. This catches both NA
+values at existing timestamps and temporal gaps where index entries
+are missing entirely. Windows failing the check are dropped with
+a message.}
 }
 \value{
 A tibble with columns:

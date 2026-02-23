@@ -422,29 +422,3 @@ is.thHydro <- function(x) inherits(x, "thHydro")
 is.thSignal <- function(x) inherits(x, "thSignal")
 
 
-
-# =============================================================================
-# LEGACY: .temperheic() factory -- retained for thSeries.R compatibility
-# TODO: Remove after thSeries.R is refactored to use explicit constructors
-# =============================================================================
-
-#' @keywords internal
-.temperheic <- function(thEnvir, thClass, generalUnits, specificUnits, attrs = NULL, attrNames = attrs) {
-  attrNames <- c(attrNames, "specificUnits", "thObjectNames")
-  attrs <- c(attrs, as.character(as.list(match.call())$specificUnits), "thObjects")
-  if (!is.thUnits(specificUnits)) stop("Units must be a 'thUnits' object.")
-  elementNames <- ls(envir = thEnvir)
-  elementNames <- elementNames[!(elementNames %in% attrs)]
-  newTemperheic <- structure(
-    sapply(elementNames, function(x) get(x, envir = thEnvir), simplify = FALSE),
-    class = c(thClass, "temperheic"),
-    units = .thSpecificUnits(generalUnits, specificUnits),
-    derivedValueNames = elementNames[!elementNames %in% names(formals(thClass))]
-  )
-  assign("thObjects", names(newTemperheic)[sapply(newTemperheic, is.temperheic)], envir = thEnvir)
-  attributeList <- sapply(attrs, function(x) get(x, envir = thEnvir), simplify = FALSE)
-  for (i in seq_along(attributeList)) {
-    attr(newTemperheic, attrNames[i]) <- attributeList[[i]]
-  }
-  return(newTemperheic)
-}
