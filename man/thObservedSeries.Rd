@@ -62,7 +62,17 @@ The estimation pipeline:
 1. fit_ols() or fitCosine() extracts amplitude and phase at each sensor depth
 2. Pairwise amplitude ratios and phase differences are computed
 3. eta = -ln(Ar) / delta_phi  (Luce 2013)
-4. Thermal velocity from eta and phase diff (Luce 2013, Eq. 60)
-5. Effective diffusivity from eta and amplitude ratio (Luce 2013, Eq. 59)
+4. Thermal velocity from eta and phase diff (Luce et al. 2013, thermal velocity from eta)
+5. Effective diffusivity from eta and amplitude ratio (Luce et al. 2013, diffusivity from eta)
 6. Darcy flux, water velocity, dispersivity, hydraulic conductivity derived
+}
+\references{
+Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
+the diurnally forced advection-diffusion equation to estimate bulk fluid
+velocity and diffusivity in streambeds from temperature time series. Water
+Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
+
+Luce, C. H., & Tonina, D. (2017). Scaling thermal transport from streams
+and their beds. Water Resources Research, 53, 9771-9790.
+doi:10.1002/2017WR021472
 }

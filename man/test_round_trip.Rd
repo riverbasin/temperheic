@@ -15,7 +15,7 @@ test_round_trip(
 
 \item{scenarios}{Passed to generate_example_series(). Default scenarios.}
 
-\item{fit_method}{Character -- fitting method: "ols" (default) or "nls".}
+\item{fit_method}{Character -- fitting method: "ols" (default), "nls", or "fft".}
 }
 \value{
 A tibble with columns: scenario, combo, parameter, known, recovered,

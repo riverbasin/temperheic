@@ -31,3 +31,13 @@ T(z,t) = T_mean + A * exp(-z / thermDecayDist) *
 Also computes pairwise amplitude ratios, phase differences, depth
 differences, and eta values for all sensor combinations.
 }
+\references{
+Stallman, R. W. (1965). Steady one-dimensional fluid flow in a semi-infinite
+porous medium with sinusoidal surface temperature. Journal of Geophysical
+Research, 70(12), 2821-2827.
+
+Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
+the diurnally forced advection-diffusion equation to estimate bulk fluid
+velocity and diffusivity in streambeds from temperature time series. Water
+Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
+}

@@ -76,5 +76,5 @@ so thObservedSeries needs no changes to use this as a drop-in replacement.
 Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
 the diurnally forced advection-diffusion equation to estimate bulk fluid
 velocity and diffusivity in streambeds from temperature time series. Water
-Resources Research, 49, 488-506.
+Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
 }

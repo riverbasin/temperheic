@@ -80,3 +80,10 @@ amount of noise (~0.01% of the mean) is added to prevent this. This has no
 measurable effect on real data but enables round-trip validation with
 synthetic signals.
 }
+\references{
+Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
+the diurnally forced advection-diffusion equation to estimate bulk fluid
+velocity and diffusivity in streambeds from temperature time series. Water
+Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
+}
+\keyword{internal}

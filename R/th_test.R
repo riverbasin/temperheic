@@ -13,6 +13,13 @@
 #' Default values from Columbia River basalt (Burns et al. 2015, GeoFluids v.15).
 #'
 #' @return A thAquifer object.
+#'
+#' @references
+#' Burns, E. R., Williams, C. F., Ingebritsen, S. E., Voss, C. I., Spane,
+#' F. A., & DeAngelo, J. (2015). Understanding heat and groundwater flow
+#' through continental flood basalt provinces: insights gained from alternative
+#' models of permeability/depth relationships for the Columbia Plateau, USA.
+#' Geofluids, 15, 120-138.
 #' @export
 generate_example_aquifer <- function(
     porosity = 0.25,
@@ -131,7 +138,7 @@ utils::globalVariables(c("known", "recovered"))
 #'
 #' @param aquifer A thAquifer object. Default uses generate_example_aquifer().
 #' @param scenarios Passed to generate_example_series(). Default scenarios.
-#' @param fit_method Character -- fitting method: "ols" (default) or "nls".
+#' @param fit_method Character -- fitting method: "ols" (default), "nls", or "fft".
 #'
 #' @return A tibble with columns: scenario, combo, parameter, known, recovered,
 #'   relative_error. Uses the [1,2] element of pairwise matrices (boundary
@@ -206,6 +213,7 @@ test_round_trip <- function(
 #'
 #' @references
 #' Parameters derived from Meacham Creek Channel 3 (2012-2014).
+#' @export
 generate_composite_boundary <- function(
     n_years = 1,
     dt = 3600,

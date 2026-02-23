@@ -62,6 +62,13 @@ by more than 1%.
 - When you need to include polynomial trend terms in the regression
 }
 \references{
-Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). WRR 49.
-Vogt, T., Schirmer, M., & Cirpka, O. A. (2012). HESS 16.
+Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
+the diurnally forced advection-diffusion equation to estimate bulk fluid
+velocity and diffusivity in streambeds from temperature time series. Water
+Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
+
+Vogt, T., Schirmer, M., & Cirpka, O. A. (2012). Investigating riparian
+groundwater flow close to a losing river using diurnal temperature
+oscillations at high vertical resolution. Hydrology and Earth System
+Sciences, 16, 473-487. doi:10.5194/hess-16-473-2012
 }

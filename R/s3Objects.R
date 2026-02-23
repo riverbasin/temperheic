@@ -285,6 +285,16 @@ thHydro <- function(hydCond, dispersivity = 0.001, headGrad, aquifer,
 #' @param hydro A thHydro object
 #' @param boundary A thBoundary object
 #' @return A thSignal S3 object
+#'
+#' @references
+#' Stallman, R. W. (1965). Steady one-dimensional fluid flow in a semi-infinite
+#' porous medium with sinusoidal surface temperature. Journal of Geophysical
+#' Research, 70(12), 2821-2827.
+#'
+#' Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
+#' the diurnally forced advection-diffusion equation to estimate bulk fluid
+#' velocity and diffusivity in streambeds from temperature time series. Water
+#' Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
 #' @export
 thSignal <- function(hydro, boundary) {
 
@@ -403,22 +413,43 @@ print.thUnits <- function(x, ...) {
 # Type-checking functions
 # =============================================================================
 
+#' Test whether an object is a temperheic S3 class
+#'
+#' Each function checks whether \code{x} inherits from the corresponding
+#' temperheic class. Useful for input validation and programmatic workflows.
+#'
+#' @param x An R object to test.
+#' @return Logical scalar: \code{TRUE} if \code{x} inherits from the class.
+#'
+#' @name is_temperheic
+#' @examples
+#' aq <- thAquifer(0.25, 0.0016, 0.000598, 0.84, 4.186, 3000, 998)
+#' is.thAquifer(aq)   # TRUE
+#' is.temperheic(aq)  # TRUE (thAquifer inherits temperheic)
+#' is.thBoundary(aq)  # FALSE
+NULL
+
+#' @rdname is_temperheic
 #' @export
 is.temperheic <- function(x) inherits(x, "temperheic")
 
+#' @rdname is_temperheic
 #' @export
 is.thUnits <- function(x) inherits(x, "thUnits")
 
+#' @rdname is_temperheic
 #' @export
 is.thAquifer <- function(x) inherits(x, "thAquifer")
 
+#' @rdname is_temperheic
 #' @export
 is.thBoundary <- function(x) inherits(x, "thBoundary")
 
+#' @rdname is_temperheic
 #' @export
 is.thHydro <- function(x) inherits(x, "thHydro")
 
+#' @rdname is_temperheic
 #' @export
 is.thSignal <- function(x) inherits(x, "thSignal")
-
 

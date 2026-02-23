@@ -20,3 +20,4 @@ and reshapes it into an n x n matrix with labeled rows and columns.
 Used by thObservedSeries to organize amplitude ratios, phase differences,
 eta values, and depth differences into sensor-pair matrices.
 }
+\keyword{internal}

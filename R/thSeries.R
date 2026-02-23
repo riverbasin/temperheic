@@ -24,6 +24,16 @@
 #' @param specificUnits A thUnits object. Must match the signal units.
 #'
 #' @return A temperheic S3 object (class thSpecifiedSeries/thSeries/temperheic)
+#'
+#' @references
+#' Stallman, R. W. (1965). Steady one-dimensional fluid flow in a semi-infinite
+#' porous medium with sinusoidal surface temperature. Journal of Geophysical
+#' Research, 70(12), 2821-2827.
+#'
+#' Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
+#' the diurnally forced advection-diffusion equation to estimate bulk fluid
+#' velocity and diffusivity in streambeds from temperature time series. Water
+#' Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
 #' @export
 thSeries <- function(signal, xVals, tVals, specificUnits) {
 
@@ -104,8 +114,8 @@ thSeries <- function(signal, xVals, tVals, specificUnits) {
 #' 1. fit_ols() or fitCosine() extracts amplitude and phase at each sensor depth
 #' 2. Pairwise amplitude ratios and phase differences are computed
 #' 3. eta = -ln(Ar) / delta_phi  (Luce 2013)
-#' 4. Thermal velocity from eta and phase diff (Luce 2013, Eq. 60)
-#' 5. Effective diffusivity from eta and amplitude ratio (Luce 2013, Eq. 59)
+#' 4. Thermal velocity from eta and phase diff (Luce et al. 2013, thermal velocity from eta)
+#' 5. Effective diffusivity from eta and amplitude ratio (Luce et al. 2013, diffusivity from eta)
 #' 6. Darcy flux, water velocity, dispersivity, hydraulic conductivity derived
 #'
 #' @param empiricalData A zoo object with one column per sensor depth.
@@ -127,6 +137,16 @@ thSeries <- function(signal, xVals, tVals, specificUnits) {
 #'   "fft" uses FFT spectral extraction at the nearest Fourier bin.
 #'
 #' @return A temperheic S3 object (class thObservedSeries/thSeries/temperheic)
+#'
+#' @references
+#' Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
+#' the diurnally forced advection-diffusion equation to estimate bulk fluid
+#' velocity and diffusivity in streambeds from temperature time series. Water
+#' Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
+#'
+#' Luce, C. H., & Tonina, D. (2017). Scaling thermal transport from streams
+#' and their beds. Water Resources Research, 53, 9771-9790.
+#' doi:10.1002/2017WR021472
 #' @export
 thObservedSeries <- function(empiricalData,
                              xVals,
@@ -196,13 +216,13 @@ thObservedSeries <- function(empiricalData,
   eta_vec[diag_locs] <- NaN  # self-comparisons undefined
   eta <- derived2DArray(eta_vec, sensor_names)
 
-  # --- Thermal velocity (Luce 2013 Eq. 60) ---
+  # --- Thermal velocity (Luce et al. 2013; v_t from eta and delta_phi) ---
   # v_t = (omega * dz / sqrt(ln(Ar)^2 + dphi^2)) * (1 - eta^2) / sqrt(1 + eta^2)
   advectiveThermVel <- ((freq * deltaXvals) /
     (sqrt(log(ampRatio)^2 + deltaPhaseRadians^2))) *
     ((1 - eta^2) / sqrt(1 + eta^2))
 
-  # --- Effective diffusivity (Luce 2013 Eq. 59) ---
+  # --- Effective diffusivity (Luce et al. 2013; kappa_e from eta and Ar) ---
   # kappa_e = eta * omega * dz^2 / (ln(Ar)^2 + dphi^2)
   diffusivity_effective <- (eta * freq * deltaXvals^2) /
     (log(ampRatio)^2 + deltaPhaseRadians^2)

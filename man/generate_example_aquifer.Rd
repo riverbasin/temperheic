@@ -20,3 +20,10 @@ A thAquifer object.
 \description{
 Default values from Columbia River basalt (Burns et al. 2015, GeoFluids v.15).
 }
+\references{
+Burns, E. R., Williams, C. F., Ingebritsen, S. E., Voss, C. I., Spane,
+F. A., & DeAngelo, J. (2015). Understanding heat and groundwater flow
+through continental flood basalt provinces: insights gained from alternative
+models of permeability/depth relationships for the Columbia Plateau, USA.
+Geofluids, 15, 120-138.
+}

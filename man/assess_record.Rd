@@ -162,9 +162,9 @@ Water Resources Research, 59, e2022WR033912. doi:10.1029/2022WR033912
 Vogt, T., Schirmer, M., & Cirpka, O. A. (2012). Investigating riparian
 groundwater flow close to a losing river using diurnal temperature
 oscillations at high vertical resolution. Hydrology and Earth System
-Sciences, 16, 473--487. doi:10.5194/hess-16-473-2012
+Sciences, 16, 473-487. doi:10.5194/hess-16-473-2012
 
 Gariglio, F. P., Tonina, D., & Luce, C. H. (2013). Spatiotemporal
 variability of hyporheic exchange through a pool-riffle-pool sequence.
-Water Resources Research, 49, 7185--7204. doi:10.1002/wrcr.20419
+Water Resources Research, 49, 7185-7204. doi:10.1002/wrcr.20419
 }

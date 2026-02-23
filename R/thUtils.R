@@ -15,6 +15,7 @@
 #' @param x Numeric vector of length n^2 (pairwise values)
 #' @param seriesNames Character vector of length n (sensor/depth names)
 #' @return A named n x n matrix with dimnames "from" (rows) and "to" (columns)
+#' @keywords internal
 derived2DArray <- function(x, seriesNames) {
   array(
     data = x,
@@ -83,6 +84,13 @@ derived2DArray <- function(x, seriesNames) {
 #'     \item{amplitudes}{Named numeric vector — fitted amplitude per sensor.}
 #'     \item{phases}{Named numeric vector — fitted phase per sensor (radians).}
 #'   }
+#'
+#' @references
+#' Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
+#' the diurnally forced advection-diffusion equation to estimate bulk fluid
+#' velocity and diffusivity in streambeds from temperature time series. Water
+#' Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
+#' @keywords internal
 fitCosine <- function(empiricalData, boundaryMean, periodInSeconds,
                       optimizeRange, nmin, empiricalDataPeriods) {
 

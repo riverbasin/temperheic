@@ -19,3 +19,13 @@ Computes how a temperature wave propagates through the aquifer:
 phase velocity, thermal decay distance, and Peclet numbers.
 Based on the PDE solution in Luce et al. (2013) equations 8-9.
 }
+\references{
+Stallman, R. W. (1965). Steady one-dimensional fluid flow in a semi-infinite
+porous medium with sinusoidal surface temperature. Journal of Geophysical
+Research, 70(12), 2821-2827.
+
+Luce, C. H., Tonina, D., Gariglio, F., & Applebee, R. (2013). Solutions for
+the diurnally forced advection-diffusion equation to estimate bulk fluid
+velocity and diffusivity in streambeds from temperature time series. Water
+Resources Research, 49, 488-506. doi:10.1002/wrcr.20090
+}
