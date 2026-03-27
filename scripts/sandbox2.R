@@ -1,39 +1,31 @@
 # myUnits = thUnits("ft", "lb", "day", "degF", "ft-lb")
 # myUnits = thUnits(t = "d")
 # myUnits = "T"
-library(zoo)
-library(temperheic)
+
 Sys.setenv(TZ="UTC")
 
 #create a thUnits Object
 myUnits = thUnits()
 
 #create a thAquifer object
-myAquifer = thAquifer(0.25, 0.00837, 0.000598, 0.84, 4.186, 2650, 998, myUnits)
+myAquifer = thAquifer(0.25, 0.00837, 0.000598, 0.84, 4.186, 3000, 998, myUnits)
 
 #permutations for hydro objects
-k = list(annual = c(400)/86400, daily = c(10)/86400)
-disp = list(annual = c(0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000), daily = c(0.0001, 0.001, 0.01, 0.1, 1, 10, 100, 1000, 10000))
-grad = list(annual = 0.01, daily = 0.1)
+k = list(annual = c(100)/86400)
+disp = list(annual = c(1))
+grad = list(annual = 0.01)
 
 #permutations for boundary objects
-mean = list(annual = 11.8, daily = 22)
-amp = list(annual = 8.9, daily = 6)
-phase = list(annual = 1786313, daily = 86400*3/5) #754040
-period = list(annual = 86400*365, daily = 86400)
+mean = list(annual = 10.5)
+amp = list(annual = 8)
+phase = list(annual = 734040)
+period = list(annual = 86400*365)
 
 #locations and times for signal plots
-xVals = list(annual = c(0, 120, 240, 360), daily = c(0, .33, .66, 1))
-tVals = list(annual = seq(0, (365 * 86400), 86400), daily = seq(0, (3600 * 24), 3600))
-#tVals = list(annual = seq(0, (43800*3600), 3600), daily = seq(0, (3600*48), 3600))
-
-# set these lists to the index of the singal you want to plot. Permutations are
-# in the "sensitivity" object calculated next
-plotList = list(annual = T, daily = T)
+xVals = list(annual = c(0,10,20,30,40,50,60,70,80,90,100,200,300,400,500))
+tVals = list(annual = seq(0, (730*86400), 86400))
 
 sensitivity = mapply(function (x, y, z) structure(expand.grid(x,y,z), names = c("disp", "k", "grad")), disp, k, grad, SIMPLIFY = F)
-
-#____________________________________________________
 
 permuteHydros = function(sa) {
   thHydroList = (mapply(function (k, disp, grad) thHydro(k, disp, grad, myAquifer, myUnits), sa$k, sa$disp, sa$grad, SIMPLIFY = F))
@@ -42,46 +34,35 @@ permuteHydros = function(sa) {
 
 aquiferHydroList = sapply(sensitivity, permuteHydros, simplify = F)
 
-sensitivity = mapply(function (w, x, y, z) structure(expand.grid(w, x,y,z), names = c("mean", "amp", "phase", "period")), mean, amp, phase, period, SIMPLIFY = F)
+R = (0.75*(myAquifer$spHeat_sed*myAquifer$density_sed))/(.25*(myAquifer$spHeat_h2o*myAquifer$density_h2o))
+Ds = myAquifer$thermCond_sed/(myAquifer$spHeat_sed*myAquifer$density_sed)
+Df = myAquifer$thermCond_h2o/(myAquifer$spHeat_h2o*myAquifer$density_h2o)
+Dref = aquiferHydroList$annual[[1]]$diffusivity_cond
+betaH = 1.33
+L = c(1)
+PeH = (aquiferHydroList$annual[[1]]$advectiveThermVel*L)/aquiferHydroList$annual[[1]]$diffusivity_cond
+PeC = 12
+Disp = (1/(R+1)) * (Ds*R + (Df + betaH*(R+1)*Dref*PeH*(PeH/PeC))/(1+(PeH/PeC)))
+Deff = aquiferHydroList$annual[[1]]$diffusivity_effective
+Disp
+Deff
+(Disp - aquiferHydroList$annual[[1]]$diffusivity_cond)/aquiferHydroList$annual[[1]]$advectiveThermVel
 
-permuteBoundarys = function(sa) {
-  thBoundaryList = (mapply(function (mean, amp, phase, period) thBoundary(mean, amp, phase, period, myUnits), sa$mean, sa$amp, sa$phase, sa$period, SIMPLIFY = F))
-  return(thBoundaryList)
-}
 
-aquiferBoundaryList = sapply(sensitivity, permuteBoundarys, simplify = F)
 
-nBoundary = sapply(aquiferBoundaryList, length)
-nHydro = sapply(aquiferHydroList, length)
+plot(PeH[2:9], Disp[2:9]/Disp[1], log = "xy")
+lines(PeH[2:9], Disp[2:9]/Disp[1])
 
-sensitivity = mapply(function(nH, nB) structure(expand.grid(1:nH, 1:nB), names = c("hydro", "boundary")), nHydro, nBoundary, SIMPLIFY = F)
 
-permuteSignals = function(sa, hydroList, boundaryList) {
-  thSignalList = (mapply(function (hIdx, bIdx) thSignal(hydroList[[hIdx]], boundaryList[[bIdx]]), sa$hydro, sa$boundary, SIMPLIFY = F))
-  return(thSignalList)
-}
+(Disp - aquiferHydroList$annual[[1]]$diffusivity_cond)/aquiferHydroList$annual[[1]]$advectiveThermVel
 
-aquiferSignalList = mapply(permuteSignals, sensitivity, aquiferHydroList, aquiferBoundaryList, SIMPLIFY = F)
 
-permuteSeries = function(sig, x, t) {
-  seriesList = sapply(sig, thSeries, xVals = x, tVals = t, specificUnits = myUnits, simplify = F)
-}
-
-aquiferSeriesList = mapply(permuteSeries, aquiferSignalList, xVals, tVals, SIMPLIFY = F )
-
-# lapply(aquiferSeriesList$annual[plotList$annual], htPlot)
-# lapply(aquiferSeriesList$daily[plotList$daily], htPlot)
-
-testObsSeriesAnnual = thObservedSeries(aquiferSeriesList$annual[[9]]$timeSeries[,1:4],
-                                 c(0,120,240,360),
-                                 365*86400,
-                                 myAquifer,
-                                 aquiferHydroList$annual[[9]],
-                                 180, optimizeRange = c(-(365*86400) * 5/10, (365*86400) * 5/10))
-
-testObsSeriesDaily = thObservedSeries(aquiferSeriesList$daily[[2]]$timeSeries[,1:4],
-                                 c(0, .33, .66, 1),
-                                 86400,
-                                 myAquifer,
-                                 aquiferHydroList$daily[[2]],
-                                 1)
+R = (0.75*(myAquifer$spHeat_sed*myAquifer$density_sed))/(.25*(myAquifer$spHeat_h2o*myAquifer$density_h2o))
+Ds = myAquifer$thermCond_sed/(myAquifer$spHeat_sed*myAquifer$density_sed)
+Df = myAquifer$thermCond_h2o/(myAquifer$spHeat_h2o*myAquifer$density_h2o)
+Dref = aquiferHydroList$annual[[1]]$diffusivity_effective
+betaH = 1.33
+L = 1
+PeH = (aquiferHydroList$annual[[1]]$advectiveThermVel*L)/aquiferHydroList$annual[[1]]$diffusivity_effective
+PeC = 12
+Disp = (1/(R+1)) * (Ds*R + (Df + betaH*(R+1)*Dref*PeH*(PeH/PeC))/(1+(PeH/PeC)))
